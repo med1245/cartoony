@@ -11,9 +11,20 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v3
-      - run: chmod +x ./gradlew
-      - run: ./gradlew :cartoony:assembleDebug --stacktrace
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 33
+          build-tools: 34.0.0
+          components: build-tools;34.0.0
+      - name: Bootstrap Gradle wrapper
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
+          unzip -q gradle-8.4-bin.zip
+          ./gradle-8.4/bin/gradle --version
+          ./gradle-8.4/bin/gradle wrapper
+      - name: Build AAR
+        run: ./gradlew :cartoony:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: cartoony-aar
