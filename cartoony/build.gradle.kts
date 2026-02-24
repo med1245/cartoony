@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
 version = "1.0.0"
 
 dependencies {
@@ -50,5 +53,55 @@ android {
     lint {
         disable.add("MissingTranslation")
         disable.add("ExtraTranslation")
+    }
+}
+
+// --- Packaging: Build .cs3 from AAR (stub mode) ---
+val aarName = "cartoony-debug.aar"
+val unpackDir = layout.buildDirectory.dir("tmp/cs3/unpack")
+val pluginTmp = layout.buildDirectory.file("tmp/cs3/plugin.json")
+val cs3OutDir = layout.buildDirectory.dir("outputs/cs3")
+
+tasks.register<Copy>("unpackAarForCs3") {
+    dependsOn("assembleDebug")
+    from(zipTree(layout.buildDirectory.file("outputs/aar/$aarName")))
+    into(unpackDir)
+}
+
+tasks.register("makeCs3") {
+    dependsOn("unpackAarForCs3")
+    doLast {
+        val pluginJson = pluginTmp.get().asFile
+        pluginJson.parentFile.mkdirs()
+        pluginJson.writeText(
+            """
+            {
+              "name": "Cartoony",
+              "className": "com.lagradost.CartoonyProvider",
+              "description": "Cartoony.net anime provider",
+              "version": 1,
+              "minApi": 3,
+              "targetApi": 3,
+              "authors": ["Cartoony"],
+              "iconUrl": "",
+              "repoUrl": "",
+              "lang": "ar",
+              "tvTypes": ["Anime","AnimeMovie"]
+            }
+            """.trimIndent()
+        )
+        val classesJar = unpackDir.get().file("classes.jar").asFile
+        val outDir = cs3OutDir.get().asFile
+        outDir.mkdirs()
+        val outFile = outDir.resolve("Cartoony.cs3")
+        ZipOutputStream(outFile.outputStream()).use { zos ->
+            fun addFileToZip(pathInZip: String, file: java.io.File) {
+                zos.putNextEntry(ZipEntry(pathInZip))
+                file.inputStream().use { it.copyTo(zos) }
+                zos.closeEntry()
+            }
+            addFileToZip("classes.jar", classesJar)
+            addFileToZip("plugin.json", pluginJson)
+        }
     }
 }
