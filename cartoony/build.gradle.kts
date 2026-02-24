@@ -147,6 +147,52 @@ tasks.register("make") {
     dependsOn("makeCs3")
 }
 
+// Legacy build targeting older app API (BasePlugin, minApi 2)
+tasks.register("makeCs3Legacy") {
+    dependsOn("dexForCs3")
+    doLast {
+        val pluginJson = pluginTmp.get().asFile
+        pluginJson.parentFile.mkdirs()
+        pluginJson.writeText(
+            """
+            {
+              "name": "Cartoony Legacy",
+              "className": "com.lagradost.CartoonyPluginLegacy",
+              "description": "Cartoony.net anime provider (legacy)",
+              "version": 1,
+              "minApi": 2,
+              "targetApi": 3,
+              "authors": ["Cartoony"],
+              "iconUrl": "",
+              "repoUrl": "",
+              "language": "ar",
+              "lang": "ar",
+              "tvTypes": ["Anime","AnimeMovie"]
+            }
+            """.trimIndent()
+        )
+        val outDir = cs3OutDir.get().asFile
+        outDir.mkdirs()
+        val outFile = outDir.resolve("CartoonyLegacy.cs3")
+        ZipOutputStream(outFile.outputStream()).use { zos ->
+            fun addFileToZip(pathInZip: String, file: java.io.File) {
+                zos.putNextEntry(ZipEntry(pathInZip))
+                file.inputStream().use { it.copyTo(zos) }
+                zos.closeEntry()
+            }
+            val classesDex = dexOutDir.get().file("classes.dex").asFile
+            addFileToZip("classes.dex", classesDex)
+            addFileToZip("plugin.json", pluginJson)
+        }
+    }
+}
+
+tasks.register("makeLegacy") {
+    group = "cloudstream"
+    description = "Builds CartoonyLegacy.cs3 (legacy CloudStream plugin bundle)"
+    dependsOn("makeCs3Legacy")
+}
+
 tasks.register("deployWithAdb") {
     group = "cloudstream"
     description = "Builds and pushes Cartoony.cs3 to /sdcard/Download via ADB"
