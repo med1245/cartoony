@@ -1,0 +1,13 @@
+{
+  "name": "Cartoony",
+  "className": "com.lagradost.CartoonyProvider",
+  "description": "Cartoony.net anime provider",
+  "version": 1,
+  "minApi": 3,
+  "targetApi": 3,
+  "authors": ["Cartoony"],
+  "iconUrl": "",
+  "repoUrl": "",
+  "lang": "ar",
+  "tvTypes": ["Anime","AnimeMovie"]
+}
