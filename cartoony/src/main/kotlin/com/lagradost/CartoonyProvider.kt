@@ -346,179 +346,35 @@ class CartoonyProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        var hasLinks = false
-        
-        try {
-            val response = app.get(data, headers = apiHeaders).text
-            val json = JSONObject(response)
-            
-            var m3u8Url = json.optString("url", "")
-            if (m3u8Url.isEmpty()) m3u8Url = json.optString("stream", "")
-            if (m3u8Url.isEmpty()) m3u8Url = json.optString("video", "")
-            if (m3u8Url.isEmpty()) m3u8Url = json.optString("link", "")
-            if (m3u8Url.isEmpty()) m3u8Url = json.optString("media", "")
-            
-            if (m3u8Url.isNotEmpty() && m3u8Url.contains(".m3u8", ignoreCase = true)) {
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = name,
-                        url = m3u8Url,
-                        referer = mainUrl,
-                        quality = Qualities.Unknown.value,
-                        isM3u8 = true
-                    )
+        val episodeDoc = app.get(data, headers = apiHeaders).document
+        val iframe = episodeDoc.selectFirst("iframe") ?: return false
+        val rawSrc = iframe.absUrl("src").ifEmpty { iframe.attr("src") }.ifEmpty { iframe.attr("data-src") }
+        val iframeUrl = when {
+            rawSrc.startsWith("http", true) -> rawSrc
+            rawSrc.startsWith("/") -> "$mainUrl$rawSrc"
+            rawSrc.isNotEmpty() -> "$mainUrl/$rawSrc"
+            else -> return false
+        }
+        val ua = apiHeaders["User-Agent"] ?: "Mozilla/5.0"
+        val iframeResponse = app.get(iframeUrl, headers = mapOf("Referer" to data, "User-Agent" to ua))
+        val html = iframeResponse.text
+        val m3u8Regex = Regex("""https?:\/\/[^\s'"]+\.m3u8""", RegexOption.IGNORE_CASE)
+        val match = m3u8Regex.find(html)
+        if (match != null) {
+            val streamUrl = match.value
+            callback(
+                ExtractorLink(
+                    source = name,
+                    name = "$name HLS",
+                    url = streamUrl,
+                    referer = iframeUrl,
+                    quality = Qualities.Unknown.value,
+                    isM3u8 = true
                 )
-                hasLinks = true
-            }
-            // Also regex-scan raw JSON for embedded .m3u8 as a safety net
-            if (!hasLinks) {
-                val re = Regex("(https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*)", RegexOption.IGNORE_CASE)
-                re.findAll(response).forEach { match ->
-                    val link = match.groupValues[1]
-                    if (link.isNotBlank()) {
-                        callback(
-                            ExtractorLink(
-                                source = name,
-                                name = name,
-                                url = link,
-                                referer = data,
-                                quality = Qualities.Unknown.value,
-                                isM3u8 = true
-                            )
-                        )
-                        hasLinks = true
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            logError(e)
+            )
+            return true
         }
-        
-        if (!hasLinks) {
-            try {
-                val document = app.get(data, headers = apiHeaders).document
-                
-                document.select("iframe").forEach { iframe ->
-                    val iframeUrl = iframe.attr("src").ifEmpty { iframe.attr("data-src") }
-                    if (iframeUrl.isNotEmpty()) {
-                        try {
-                            val iframeResp = app.get(iframeUrl, headers = mapOf("Referer" to data, "User-Agent" to apiHeaders["User-Agent"].orEmpty()))
-                            val iframeDoc = iframeResp.document
-                            // Try regex on raw body first
-                            val raw = iframeResp.text
-                            val re = Regex("(https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*)", RegexOption.IGNORE_CASE)
-                            var foundM3u8 = re.find(raw)?.groupValues?.getOrNull(1).orEmpty()
-                            if (foundM3u8.isBlank()) {
-                                foundM3u8 = extractM3u8Link(iframeDoc)
-                            }
-                            if (foundM3u8.isNotEmpty()) {
-                                callback(
-                                    ExtractorLink(
-                                        source = name,
-                                        name = name,
-                                        url = foundM3u8,
-                                        referer = data,
-                                        quality = Qualities.Unknown.value,
-                                        isM3u8 = true
-                                    )
-                                )
-                                hasLinks = true
-                            } else {
-                                // One more nested iframe attempt
-                                iframeDoc.select("iframe").forEach inner@ { inner ->
-                                    val innerUrl = inner.attr("src").ifEmpty { inner.attr("data-src") }
-                                    if (innerUrl.isNotEmpty()) {
-                                        try {
-                                            val innerResp = app.get(innerUrl, headers = mapOf("Referer" to iframeUrl))
-                                            val innerDoc = innerResp.document
-                                            val innerRaw = innerResp.text
-                                            val innerFound = re.find(innerRaw)?.groupValues?.getOrNull(1)
-                                                ?: extractM3u8Link(innerDoc)
-                                            if (!innerFound.isNullOrBlank()) {
-                                                callback(
-                                                    ExtractorLink(
-                                                        source = name,
-                                                        name = name,
-                                                        url = innerFound,
-                                                        referer = innerUrl,
-                                                        quality = Qualities.Unknown.value,
-                                                        isM3u8 = true
-                                                    )
-                                                )
-                                                hasLinks = true
-                                                return@inner
-                                            }
-                                        } catch (_: Exception) {
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            logError(e)
-                        }
-                    }
-                }
-                
-                document.select("script").forEach { script ->
-                    val scriptContent = script.html()
-                    val m3u8Pattern = Regex("(https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*)")
-                    val matches = m3u8Pattern.findAll(scriptContent)
-                    
-                    matches.forEach { match ->
-                        val m3u8Link = match.groupValues[1]
-                        if (m3u8Link.isNotEmpty()) {
-                            callback(
-                                ExtractorLink(
-                                    source = name,
-                                    name = name,
-                                    url = m3u8Link,
-                                    referer = data,
-                                    quality = Qualities.Unknown.value,
-                                    isM3u8 = true
-                                )
-                            )
-                            hasLinks = true
-                        }
-                    }
-                }
-                
-                document.select("video source").forEach { source ->
-                    val videoUrl = source.attr("src")
-                    if (videoUrl.isNotEmpty() && videoUrl.contains(".m3u8", ignoreCase = true)) {
-                        callback(
-                            ExtractorLink(
-                                source = name,
-                                name = name,
-                                url = videoUrl,
-                                referer = data,
-                                quality = Qualities.Unknown.value,
-                                isM3u8 = true
-                            )
-                        )
-                        hasLinks = true
-                    }
-                }
-                // Basic subtitle discovery in page
-                val subRe = Regex("(https?://[^\"'\\s]+\\.(vtt|srt))", RegexOption.IGNORE_CASE)
-                val pageRaw = document.outerHtml()
-                subRe.findAll(pageRaw).forEach { m ->
-                    val subUrl = m.groupValues[1]
-                    if (subUrl.isNotBlank()) {
-                        subtitleCallback(
-                            SubtitleFile(
-                                "Unknown",
-                                subUrl
-                            )
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                logError(e)
-            }
-        }
-
-        return hasLinks
+        return false
     }
 
     private fun extractM3u8Link(document: org.jsoup.nodes.Document): String {
