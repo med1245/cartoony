@@ -5,8 +5,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -26,6 +30,8 @@ jobs:
         run: ./gradle-8.6/bin/gradle :cartoony:assembleDebug --stacktrace
       - name: Build CS3
         run: ./gradle-8.6/bin/gradle :cartoony:makeCs3 --stacktrace
+      - name: Generate plugins.json with SHA256
+        run: ./gradle-8.6/bin/gradle writePluginsJson --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: cartoony-aar
@@ -34,3 +40,25 @@ jobs:
         with:
           name: cartoony-cs3
           path: cartoony/build/outputs/cs3/*.cs3
+      - name: Publish to builds branch
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Switch to builds branch (create if missing)
+          if git show-ref --quiet refs/heads/builds; then
+            git checkout builds
+          else
+            git checkout --orphan builds
+            rm -rf .
+          fi
+          mkdir -p .
+          cp -f cartoony/build/outputs/cs3/*.cs3 Cartoony.cs3
+          cp -f plugins.json plugins.json
+          git add Cartoony.cs3 plugins.json
+          if git commit -m "Update Cartoony.cs3 and plugins.json [skip ci]"; then
+            git push origin builds
+          else
+            echo "Nothing to commit."
+            git push origin builds || true
+          fi

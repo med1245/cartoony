@@ -33,7 +33,7 @@ tasks.register("writePluginsJson") {
                 "version": 1,
                 "authors": ["Cartoony"],
                 "language": "ar",
-                "url": "https://raw.githubusercontent.com/med1245/cartoony/main/cartoony/build/outputs/cs3/Cartoony.cs3",
+                "url": "https://raw.githubusercontent.com/med1245/cartoony/builds/Cartoony.cs3",
                 "sha256": "$hash",
                 "iconUrl": "",
                 "tvTypes": ["Anime", "AnimeMovie"],
