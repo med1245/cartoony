@@ -45,10 +45,11 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Stage artifacts in a temp dir
-          mkdir -p publish
-          cp -f cartoony/build/outputs/cs3/*.cs3 publish/Cartoony.cs3
-          cp -f plugins.json publish/plugins.json
+          # Stage artifacts in a runner temp dir (safe from git clean)
+          PUBLISH_DIR="$RUNNER_TEMP/cartoony_publish"
+          mkdir -p "$PUBLISH_DIR"
+          cp -f cartoony/build/outputs/cs3/*.cs3 "$PUBLISH_DIR/Cartoony.cs3"
+          cp -f plugins.json "$PUBLISH_DIR/plugins.json"
           # Create/switch to builds branch as orphan commit history
           git fetch origin
           if git ls-remote --exit-code --heads origin builds; then
@@ -60,9 +61,9 @@ jobs:
           git rm -rf . || true
           git clean -fdx || true
           # Restore only the artifacts
-          cp -f publish/Cartoony.cs3 Cartoony.cs3
-          cp -f publish/plugins.json plugins.json
-          rm -rf publish
+          cp -f "$PUBLISH_DIR/Cartoony.cs3" Cartoony.cs3
+          cp -f "$PUBLISH_DIR/plugins.json" plugins.json
           git add -A
-          git commit -m "Update Cartoony.cs3 and plugins.json [skip ci]" || true
-          git push -f origin builds
+          git commit -m "Update Cartoony.cs3 and plugins.json [skip ci]" --allow-empty
+          # Push current HEAD to remote 'builds' (create/update)
+          git push -f origin HEAD:builds
