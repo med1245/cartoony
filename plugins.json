@@ -5,6 +5,7 @@
     "authors": ["Cartoony"],
     "lang": "ar",
     "url": "https://raw.githubusercontent.com/med1245/cartoony/main/cartoony/build/outputs/cs3/Cartoony.cs3",
+    "sha256": "652fa5c09795d380c2e82d659ac3eaa7b87782eac5622aa658602941182dc3b6",
     "iconUrl": "",
     "tvTypes": ["Anime", "AnimeMovie"],
     "description": "Cartoony.net anime provider"
