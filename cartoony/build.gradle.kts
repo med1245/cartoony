@@ -118,6 +118,7 @@ tasks.register("makeCs3") {
               "authors": ["Cartoony"],
               "iconUrl": "",
               "repoUrl": "",
+              "language": "ar",
               "lang": "ar",
               "tvTypes": ["Anime","AnimeMovie"]
             }
