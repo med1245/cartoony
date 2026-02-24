@@ -138,3 +138,30 @@ tasks.register("makeCs3") {
         }
     }
 }
+
+// CloudStream-like convenience tasks
+tasks.register("make") {
+    group = "cloudstream"
+    description = "Builds Cartoony.cs3 (CloudStream plugin bundle)"
+    dependsOn("makeCs3")
+}
+
+tasks.register("deployWithAdb") {
+    group = "cloudstream"
+    description = "Builds and pushes Cartoony.cs3 to /sdcard/Download via ADB"
+    dependsOn("makeCs3")
+    doLast {
+        val cs3 = cs3OutDir.get().file("Cartoony.cs3").asFile
+        val adbCmd = System.getenv("ADB") ?: "adb"
+        try {
+            exec {
+                isIgnoreExitValue = true
+                commandLine(adbCmd, "push", cs3.absolutePath, "/sdcard/Download/Cartoony.cs3")
+            }
+            println("Pushed to /sdcard/Download/Cartoony.cs3 (if a device was connected).")
+        } catch (_: Exception) {
+            println("ADB not available. Manually copy ${cs3.absolutePath} to your device.")
+        }
+        println("Install in CloudStream: Settings → Extensions → Install from storage → select Cartoony.cs3")
+    }
+}
