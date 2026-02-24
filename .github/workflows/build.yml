@@ -17,13 +17,13 @@ jobs:
           api-level: 33
           build-tools: 34.0.0
           components: build-tools;34.0.0
-      - name: Download Gradle
+      - name: Download Gradle (8.6 – required by AGP 8.4.x)
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
-          unzip -q gradle-8.4-bin.zip
-          ./gradle-8.4/bin/gradle --version
+          wget -q https://services.gradle.org/distributions/gradle-8.6-bin.zip
+          unzip -q gradle-8.6-bin.zip
+          ./gradle-8.6/bin/gradle --version
       - name: Build AAR
-        run: ./gradle-8.4/bin/gradle :cartoony:assembleDebug --stacktrace
+        run: ./gradle-8.6/bin/gradle :cartoony:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: cartoony-aar
