@@ -1,6 +1,21 @@
 # Cartoony Provider for CloudStream3
 
-A CloudStream3 extension for streaming anime from cartoony.net.
+A CloudStream3 extension for streaming anime from **cartoony.net**.
+
+**Status**: 70% Complete - Ready for Testing & Refinement  
+**Last Updated**: February 24, 2026
+
+## 🚀 Quick Links
+
+| Document | Purpose |
+|----------|---------|
+| **[COMPLETION_CHECKLIST.md](COMPLETION_CHECKLIST.md)** | ⭐ **START HERE** - Step-by-step checklist |
+| [SETUP_ENVIRONMENT.md](SETUP_ENVIRONMENT.md) | Install Java, Android SDK, Git |
+| [BUILD_GUIDE.md](BUILD_GUIDE.md) | Build the extension |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Deploy to CloudStream3 |
+| [QUICK_START.md](QUICK_START.md) | 5-15 minute setup |
+| [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) | Detailed customization |
+| [PROJECT_STATUS.md](PROJECT_STATUS.md) | Project overview & status |
 
 ## Features
 
@@ -14,24 +29,35 @@ A CloudStream3 extension for streaming anime from cartoony.net.
 
 ### Prerequisites
 
-- Android Studio or Kotlin development environment
-- Gradle
-- JDK 11 or higher
+- ✅ Java Development Kit (JDK) 11 or higher
+- ✅ Gradle (included via wrapper)
+- ✅ Android SDK (optional, for Android Studio users)
 
-### Building
+**Not installed?** See [SETUP_ENVIRONMENT.md](SETUP_ENVIRONMENT.md)
 
-1. Clone this repository:
+### Quick Build (3 Steps)
+
+1. **Open terminal/PowerShell** and navigate to project:
 ```bash
-git clone <repository-url>
-cd cartoony
+cd "C:\Users\MEHDI MARSAMAN\Documents\cartoony"
 ```
 
-2. Build the extension:
+2. **Build the extension**:
 ```bash
-./gradlew build
+.\gradlew.bat build
 ```
 
-3. The compiled extension will be available in `cartoony/build/outputs/`
+3. **Find the compiled extension**:
+```
+cartoony/build/outputs/aar/cartoony-release.aar
+```
+
+### First Time Users
+
+1. [Install Java](SETUP_ENVIRONMENT.md) (if needed)
+2. [Build the extension](BUILD_GUIDE.md)
+3. [Deploy to CloudStream3](DEPLOYMENT_GUIDE.md)
+4. [Test features](COMPLETION_CHECKLIST.md)
 
 ## Usage
 

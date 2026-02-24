@@ -4,6 +4,8 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.json.JSONArray
 import org.json.JSONObject
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 /**
  * Cartoony Provider for CloudStream3
@@ -19,41 +21,137 @@ class CartoonyProvider : MainAPI() {
     override var mainUrl = "https://cartoony.net"
     override var name = "Cartoony"
     override val hasMainPage = true
-    override var lang = "en"
+    override var lang = "ar"
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(
         TvType.Anime,
         TvType.AnimeMovie
     )
 
+    private val apiHeaders by lazy {
+        mapOf(
+            "Accept" to "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With" to "XMLHttpRequest",
+            "Referer" to "$mainUrl/",
+            "Origin" to mainUrl,
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language" to "en-US,en;q=0.9"
+        )
+    }
+
+    private suspend fun fetchJsonArray(urls: List<String>): JSONArray? {
+        for (url in urls) {
+            try {
+                val text = app.get(url, headers = apiHeaders).text
+                if (text.contains("Access denied", ignoreCase = true)) continue
+                return JSONArray(text)
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
+    private suspend fun fetchJsonObject(urls: List<String>): JSONObject? {
+        for (url in urls) {
+            try {
+                val text = app.get(url, headers = apiHeaders).text
+                if (text.contains("Access denied", ignoreCase = true)) continue
+                return JSONObject(text)
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
+    private fun parseCardsFromHtml(document: Document): List<SearchResponse> {
+        val candidates = mutableListOf<org.jsoup.nodes.Element>()
+        val containerSelectors = listOf(
+            ".items .item a",
+            ".grid .card a",
+            "article a",
+            ".post a",
+            ".entry a",
+            ".media a",
+            ".list a",
+            "a.card",
+            ".item a",
+            "a[href*=/watch/]"
+        )
+        for (sel in containerSelectors) {
+            val found = document.select(sel)
+            if (found.isNotEmpty()) {
+                candidates.addAll(found)
+            }
+        }
+        val cards = candidates.ifEmpty { document.select("a[href*=/watch/]") }
+        val seen = hashSetOf<String>()
+        return cards.mapNotNull { elementToSearchResponse(it, seen) }
+    }
+
+    private fun elementToSearchResponse(a: Element, seen: MutableSet<String>): SearchResponse? {
+        val href = a.absUrl("href").ifEmpty { a.attr("href") }
+        if (!href.contains("/watch/")) return null
+        val id = href.substringAfter("/watch/").substringBefore("/")
+        if (id.isBlank() || !seen.add(id)) return null
+        val title = run {
+            val direct = a.attr("title")
+            if (direct.isNotBlank()) direct else
+                a.selectFirst(".title, .name, .card-title, .entry-title")?.text().orEmpty()
+                    .ifEmpty { a.text() }
+                    .ifEmpty { "Unknown" }
+        }
+        val img = extractImageUrl(a).ifEmpty { extractImageUrl(a.parent()) }
+        return newAnimeSearchResponse(
+            name = title,
+            url = "$mainUrl/watch/$id",
+            type = TvType.Anime
+        ) {
+            this.posterUrl = img
+        }
+    }
+
+    override val mainPage = mainPageOf(
+        Pair("home", "الرئيسية")
+    )
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val homePageList = mutableListOf<SearchResponse>()
         
         try {
-            val response = app.get("$mainUrl/api/shows").text
-            val jsonArray = JSONArray(response)
-            
-            for (i in 0 until minOf(jsonArray.length(), 20)) {
-                try {
-                    val item = jsonArray.getJSONObject(i)
-                    val title = item.optString("title", item.optString("name", "Unknown"))
-                    val id = item.optString("id", item.optString("slug", ""))
-                    val posterUrl = item.optString("image", item.optString("poster", ""))
-                    val rating = item.optDouble("rating", 0.0).toInt()
-                    
-                    if (id.isEmpty()) continue
-                    
-                    val anime = newAnimeSearchResponse(
-                        name = title,
-                        url = "$mainUrl/watch/$id",
-                        type = TvType.Anime
-                    ) {
-                        this.posterUrl = posterUrl
-                        this.rating = rating
+            val url = when (request.data) {
+                "home" -> mainUrl
+                else -> mainUrl
+            }
+            val doc = app.get(url).document
+            homePageList.addAll(parseCardsFromHtml(doc).take(20))
+            if (homePageList.isEmpty()) {
+                val jsonArray = fetchJsonArray(
+                    listOf(
+                        "$mainUrl/api/tvshows",
+                        "$mainUrl/api/shows"
+                    )
+                )
+                if (jsonArray != null) {
+                    for (i in 0 until minOf(jsonArray.length(), 20)) {
+                        try {
+                            val item = jsonArray.getJSONObject(i)
+                            val title = item.optString("title", item.optString("name", "Unknown"))
+                            val id = item.optString("id", item.optString("slug", ""))
+                            val posterUrl = item.optString("image", item.optString("poster", ""))
+                            val rating = item.optDouble("rating", 0.0).toInt()
+                            if (id.isEmpty()) continue
+                            val anime = newAnimeSearchResponse(
+                                name = title,
+                                url = "$mainUrl/watch/$id",
+                                type = TvType.Anime
+                            ) {
+                                this.posterUrl = posterUrl
+                                this.rating = rating
+                            }
+                            homePageList.add(anime)
+                        } catch (_: Exception) {
+                        }
                     }
-                    homePageList.add(anime)
-                } catch (e: Exception) {
-                    continue
                 }
             }
         } catch (e: Exception) {
@@ -75,33 +173,51 @@ class CartoonyProvider : MainAPI() {
         val results = mutableListOf<SearchResponse>()
         
         try {
-            val searchUrl = "$mainUrl/api/search?q=${query.replace(" ", "+")}"
-            val response = app.get(searchUrl).text
-            val jsonArray = JSONArray(response)
-            
-            for (i in 0 until jsonArray.length()) {
+            val htmlSearchUrls = listOf(
+                "$mainUrl/search?q=${query.replace(" ", "+")}",
+                "$mainUrl/?s=${query.replace(" ", "+")}"
+            )
+            for (u in htmlSearchUrls) {
                 try {
-                    val item = jsonArray.getJSONObject(i)
-                    val title = item.optString("title", item.optString("name", "Unknown"))
-                    val id = item.optString("id", item.optString("slug", ""))
-                    val posterUrl = item.optString("image", item.optString("poster", ""))
-                    val rating = item.optDouble("rating", 0.0).toInt()
-                    
-                    if (id.isEmpty()) continue
-                    
-                    results.add(
-                        newAnimeSearchResponse(
-                            name = title,
-                            url = "$mainUrl/watch/$id",
-                            type = TvType.Anime
-                        ) {
-                            this.posterUrl = posterUrl
-                            this.rating = rating
-                        }
+                    val doc = app.get(u).document
+                    val parsed = parseCardsFromHtml(doc)
+                    if (parsed.isNotEmpty()) {
+                        results.addAll(parsed)
+                        break
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            if (results.isEmpty()) {
+                val jsonArray = fetchJsonArray(
+                    listOf(
+                        "$mainUrl/api/search?q=${query.replace(" ", "+")}",
+                        "$mainUrl/api/search/${query.replace(" ", "+")}"
                     )
-                } catch (e: Exception) {
-                    logError(e)
-                    continue
+                )
+                if (jsonArray != null) {
+                    for (i in 0 until jsonArray.length()) {
+                        try {
+                            val item = jsonArray.getJSONObject(i)
+                            val title = item.optString("title", item.optString("name", "Unknown"))
+                            val id = item.optString("id", item.optString("slug", ""))
+                            val posterUrl = item.optString("image", item.optString("poster", ""))
+                            val rating = item.optDouble("rating", 0.0).toInt()
+                            if (id.isEmpty()) continue
+                            results.add(
+                                newAnimeSearchResponse(
+                                    name = title,
+                                    url = "$mainUrl/watch/$id",
+                                    type = TvType.Anime
+                                ) {
+                                    this.posterUrl = posterUrl
+                                    this.rating = rating
+                                }
+                            )
+                        } catch (e: Exception) {
+                            logError(e)
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -122,49 +238,91 @@ class CartoonyProvider : MainAPI() {
         val episodes = mutableListOf<Episode>()
         
         try {
-            val showResponse = app.get("$mainUrl/api/shows/$showId").text
-            val showJson = JSONObject(showResponse)
+            val showJson = fetchJsonObject(
+                listOf(
+                    "$mainUrl/api/tvshows/$showId",
+                    "$mainUrl/api/shows/$showId"
+                )
+            )
             
-            title = showJson.optString("title", showJson.optString("name", "Unknown"))
-            posterUrl = showJson.optString("image", showJson.optString("poster", ""))
-            description = showJson.optString("description", showJson.optString("synopsis", ""))
-            rating = showJson.optDouble("rating", 0.0).toInt()
-            
-            val typeStr = showJson.optString("type", "")
-            type = if (typeStr.contains("Movie", ignoreCase = true)) {
-                TvType.AnimeMovie
-            } else {
-                TvType.Anime
-            }
-            
-            try {
-                val episodesResponse = app.get("$mainUrl/api/shows/$showId/episodes").text
-                val episodesJson = JSONArray(episodesResponse)
+            if (showJson != null) {
+                title = showJson.optString("title", showJson.optString("name", "Unknown"))
+                posterUrl = showJson.optString("image", showJson.optString("poster", ""))
+                description = showJson.optString("description", showJson.optString("synopsis", ""))
+                rating = showJson.optDouble("rating", 0.0).toInt()
                 
-                for (i in 0 until episodesJson.length()) {
-                    try {
-                        val ep = episodesJson.getJSONObject(i)
-                        val epId = ep.optString("id", "")
-                        val epTitle = ep.optString("title", ep.optString("name", "Episode ${i + 1}"))
-                        val epNumber = ep.optInt("episode_number", ep.optInt("number", i + 1))
-                        
-                        if (epId.isEmpty()) continue
-                        
-                        episodes.add(
-                            Episode(
-                                data = "$mainUrl/api/episodes/$epId/stream",
-                                name = epTitle,
-                                season = 1,
-                                episode = epNumber
-                            )
-                        )
-                    } catch (e: Exception) {
-                        logError(e)
-                        continue
-                    }
+                val typeStr = showJson.optString("type", "")
+                type = if (typeStr.contains("Movie", ignoreCase = true)) {
+                    TvType.AnimeMovie
+                } else {
+                    TvType.Anime
                 }
-            } catch (e: Exception) {
-                logError(e)
+                
+                try {
+                    val episodesJson = fetchJsonArray(
+                        listOf(
+                            "$mainUrl/api/tvshows/$showId/episodes",
+                            "$mainUrl/api/shows/$showId/episodes"
+                        )
+                    )
+                    
+                    if (episodesJson != null) {
+                        for (i in 0 until episodesJson.length()) {
+                            try {
+                                val ep = episodesJson.getJSONObject(i)
+                                val epId = ep.optString("id", "")
+                                val epTitle = ep.optString("title", ep.optString("name", "Episode ${i + 1}"))
+                                val epNumber = ep.optInt("episode_number", ep.optInt("number", i + 1))
+                                
+                                if (epId.isEmpty()) continue
+                                
+                                episodes.add(
+                                    Episode(
+                                        data = "$mainUrl/api/episodes/$epId/stream",
+                                        name = epTitle,
+                                        season = 1,
+                                        episode = epNumber
+                                    )
+                                )
+                            } catch (e: Exception) {
+                                logError(e)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    logError(e)
+                }
+            } else {
+                try {
+                    val doc = app.get(url).document
+                    title = doc.selectFirst("h1, .title, .name")?.text().orEmpty().ifEmpty { title }
+                    posterUrl = (doc.selectFirst(".poster img, .cover img, img[alt*=poster]")?.let {
+                        it.absUrl("data-original")
+                            .ifEmpty { it.absUrl("data-src") }
+                            .ifEmpty { it.absUrl("srcset").substringBefore(" ").ifEmpty { it.absUrl("src") } }
+                    } ?: run { extractImageUrl(doc.selectFirst(".poster, .cover") ?: doc.body()) }).orEmpty()
+                    description = doc.selectFirst(".description, .plot, p")?.text().orEmpty().ifEmpty { description }
+                    val eps = doc.select(
+                        "a[href*=/episode/], a[data-episode], .episodes a, .episode a, li a[href*=/episode/]"
+                    )
+                    var epNum = 1
+                    eps.forEach { a ->
+                        val href = a.absUrl("href").ifEmpty { a.attr("href") }
+                        val name = a.attr("title").ifEmpty { a.text() }.ifEmpty { "Episode $epNum" }
+                        if (href.isNotBlank()) {
+                            episodes.add(
+                                Episode(
+                                    data = href,
+                                    name = name,
+                                    season = 1,
+                                    episode = epNum++
+                                )
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    logError(e)
+                }
             }
         } catch (e: Exception) {
             logError(e)
@@ -191,7 +349,7 @@ class CartoonyProvider : MainAPI() {
         var hasLinks = false
         
         try {
-            val response = app.get(data).text
+            val response = app.get(data, headers = apiHeaders).text
             val json = JSONObject(response)
             
             var m3u8Url = json.optString("url", "")
@@ -213,32 +371,88 @@ class CartoonyProvider : MainAPI() {
                 )
                 hasLinks = true
             }
+            // Also regex-scan raw JSON for embedded .m3u8 as a safety net
+            if (!hasLinks) {
+                val re = Regex("(https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*)", RegexOption.IGNORE_CASE)
+                re.findAll(response).forEach { match ->
+                    val link = match.groupValues[1]
+                    if (link.isNotBlank()) {
+                        callback(
+                            ExtractorLink(
+                                source = name,
+                                name = name,
+                                url = link,
+                                referer = data,
+                                quality = Qualities.Unknown.value,
+                                isM3u8 = true
+                            )
+                        )
+                        hasLinks = true
+                    }
+                }
+            }
         } catch (e: Exception) {
             logError(e)
         }
         
         if (!hasLinks) {
             try {
-                val document = app.get(data).document
+                val document = app.get(data, headers = apiHeaders).document
                 
                 document.select("iframe").forEach { iframe ->
                     val iframeUrl = iframe.attr("src").ifEmpty { iframe.attr("data-src") }
                     if (iframeUrl.isNotEmpty()) {
                         try {
-                            val iframeDoc = app.get(iframeUrl).document
-                            val m3u8Link = extractM3u8Link(iframeDoc)
-                            if (m3u8Link.isNotEmpty()) {
+                            val iframeResp = app.get(iframeUrl, headers = mapOf("Referer" to data, "User-Agent" to apiHeaders["User-Agent"].orEmpty()))
+                            val iframeDoc = iframeResp.document
+                            // Try regex on raw body first
+                            val raw = iframeResp.text
+                            val re = Regex("(https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*)", RegexOption.IGNORE_CASE)
+                            var foundM3u8 = re.find(raw)?.groupValues?.getOrNull(1).orEmpty()
+                            if (foundM3u8.isBlank()) {
+                                foundM3u8 = extractM3u8Link(iframeDoc)
+                            }
+                            if (foundM3u8.isNotEmpty()) {
                                 callback(
                                     ExtractorLink(
                                         source = name,
                                         name = name,
-                                        url = m3u8Link,
+                                        url = foundM3u8,
                                         referer = data,
                                         quality = Qualities.Unknown.value,
                                         isM3u8 = true
                                     )
                                 )
                                 hasLinks = true
+                            } else {
+                                // One more nested iframe attempt
+                                iframeDoc.select("iframe").forEach inner@ { inner ->
+                                    val innerUrl = inner.attr("src").ifEmpty { inner.attr("data-src") }
+                                    if (innerUrl.isNotEmpty()) {
+                                        try {
+                                            val innerResp = app.get(innerUrl, headers = mapOf("Referer" to iframeUrl))
+                                            val innerDoc = innerResp.document
+                                            val innerRaw = innerResp.text
+                                            val innerFound = re.find(innerRaw)?.groupValues?.getOrNull(1)
+                                                ?: extractM3u8Link(innerDoc)
+                                            if (!innerFound.isNullOrBlank()) {
+                                                callback(
+                                                    ExtractorLink(
+                                                        source = name,
+                                                        name = name,
+                                                        url = innerFound,
+                                                        referer = innerUrl,
+                                                        quality = Qualities.Unknown.value,
+                                                        isM3u8 = true
+                                                    )
+                                                )
+                                                hasLinks = true
+                                                return@inner
+                                            }
+                                        } catch (_: Exception) {
+                                        }
+                                    }
+                                }
                             }
                         } catch (e: Exception) {
                             logError(e)
@@ -285,6 +499,20 @@ class CartoonyProvider : MainAPI() {
                         hasLinks = true
                     }
                 }
+                // Basic subtitle discovery in page
+                val subRe = Regex("(https?://[^\"'\\s]+\\.(vtt|srt))", RegexOption.IGNORE_CASE)
+                val pageRaw = document.outerHtml()
+                subRe.findAll(pageRaw).forEach { m ->
+                    val subUrl = m.groupValues[1]
+                    if (subUrl.isNotBlank()) {
+                        subtitleCallback(
+                            SubtitleFile(
+                                "Unknown",
+                                subUrl
+                            )
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 logError(e)
             }
@@ -323,6 +551,28 @@ class CartoonyProvider : MainAPI() {
             return dataLink
         }
 
+        return ""
+    }
+
+    private fun extractImageUrl(node: org.jsoup.nodes.Element?): String {
+        if (node == null) return ""
+        val img = node.selectFirst("img")
+        if (img != null) {
+            val candidates = listOf(
+                img.absUrl("data-original"),
+                img.absUrl("data-src"),
+                img.absUrl("srcset").substringBefore(" "),
+                img.absUrl("src")
+            ).firstOrNull { it.isNotBlank() }
+            if (candidates != null) return candidates
+        }
+        // Background-image style
+        val style = node.attr("style")
+        if (style.contains("background-image")) {
+            val regex = Regex("url\\(['\"]?([^'\")]+)['\"]?\\)")
+            val m = regex.find(style)
+            if (m != null) return m.groupValues[1]
+        }
         return ""
     }
 }
