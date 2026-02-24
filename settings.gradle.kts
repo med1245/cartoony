@@ -40,3 +40,4 @@ dependencyResolutionManagement {
 rootProject.name = "CartoonyProvider"
 
 include(":cartoony")
+include(":cloudstream-stubs")

@@ -6,7 +6,7 @@ plugins {
 version = "1.0.0"
 
 dependencies {
-    implementation("com.lagradost:cloudstream3:pre-release")
+    compileOnly(project(":cloudstream-stubs"))
     implementation("org.jsoup:jsoup:1.15.2")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.23")
 }
