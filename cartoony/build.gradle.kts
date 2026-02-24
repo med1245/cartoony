@@ -5,6 +5,7 @@ plugins {
 
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import java.util.Properties
 
 version = "1.0.0"
 
@@ -60,6 +61,7 @@ android {
 val aarName = "cartoony-debug.aar"
 val unpackDir = layout.buildDirectory.dir("tmp/cs3/unpack")
 val pluginTmp = layout.buildDirectory.file("tmp/cs3/plugin.json")
+val dexOutDir = layout.buildDirectory.dir("tmp/cs3/dex")
 val cs3OutDir = layout.buildDirectory.dir("outputs/cs3")
 
 tasks.register<Copy>("unpackAarForCs3") {
@@ -68,8 +70,39 @@ tasks.register<Copy>("unpackAarForCs3") {
     into(unpackDir)
 }
 
-tasks.register("makeCs3") {
+fun getSdkDir(): File {
+    // Resolve Android SDK directory from local.properties or env
+    val propsFile = rootProject.file("local.properties")
+    if (propsFile.exists()) {
+        val props = Properties()
+        propsFile.inputStream().use { props.load(it) }
+        val sdk = props.getProperty("sdk.dir") ?: props.getProperty("android.sdk.path")
+        if (!sdk.isNullOrBlank()) return File(sdk)
+    }
+    val env = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (!env.isNullOrBlank()) return File(env)
+    throw GradleException("Android SDK not found. Set sdk.dir in local.properties or ANDROID_SDK_ROOT env var.")
+}
+
+// Convert classes.jar -> classes.dex using D8
+tasks.register<Exec>("dexForCs3") {
     dependsOn("unpackAarForCs3")
+    doFirst {
+        dexOutDir.get().asFile.mkdirs()
+    }
+    val sdkDir = getSdkDir()
+    val isWin = System.getProperty("os.name")?.lowercase()?.contains("win") == true
+    val d8Name = if (isWin) "d8.bat" else "d8"
+    val d8 = File(File(sdkDir, "build-tools/${android.buildToolsVersion}"), d8Name)
+    val classesJar = unpackDir.get().file("classes.jar").asFile
+    if (!d8.exists()) {
+        throw GradleException("D8 not found at ${d8.absolutePath}. Check buildToolsVersion or SDK setup.")
+    }
+    commandLine(d8.absolutePath, classesJar.absolutePath, "--output", dexOutDir.get().asFile.absolutePath)
+}
+
+tasks.register("makeCs3") {
+    dependsOn("dexForCs3")
     doLast {
         val pluginJson = pluginTmp.get().asFile
         pluginJson.parentFile.mkdirs()
@@ -77,10 +110,10 @@ tasks.register("makeCs3") {
             """
             {
               "name": "Cartoony",
-              "className": "com.lagradost.CartoonyProvider",
+              "className": "com.lagradost.CartoonyPlugin",
               "description": "Cartoony.net anime provider",
               "version": 1,
-              "minApi": 2,
+              "minApi": 3,
               "targetApi": 3,
               "authors": ["Cartoony"],
               "iconUrl": "",
@@ -90,7 +123,6 @@ tasks.register("makeCs3") {
             }
             """.trimIndent()
         )
-        val classesJar = unpackDir.get().file("classes.jar").asFile
         val outDir = cs3OutDir.get().asFile
         outDir.mkdirs()
         val outFile = outDir.resolve("Cartoony.cs3")
@@ -100,7 +132,8 @@ tasks.register("makeCs3") {
                 file.inputStream().use { it.copyTo(zos) }
                 zos.closeEntry()
             }
-            addFileToZip("classes.jar", classesJar)
+            val classesDex = dexOutDir.get().file("classes.dex").asFile
+            addFileToZip("classes.dex", classesDex)
             addFileToZip("plugin.json", pluginJson)
         }
     }

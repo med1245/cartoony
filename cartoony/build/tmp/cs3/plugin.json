@@ -1,9 +1,9 @@
 {
   "name": "Cartoony",
-  "className": "com.lagradost.CartoonyProvider",
+  "className": "com.lagradost.CartoonyPlugin",
   "description": "Cartoony.net anime provider",
   "version": 1,
-  "minApi": 2,
+  "minApi": 3,
   "targetApi": 3,
   "authors": ["Cartoony"],
   "iconUrl": "",
