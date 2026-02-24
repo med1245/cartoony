@@ -24,7 +24,13 @@ jobs:
           ./gradle-8.6/bin/gradle --version
       - name: Build AAR
         run: ./gradle-8.6/bin/gradle :cartoony:assembleDebug --stacktrace
+      - name: Build CS3
+        run: ./gradle-8.6/bin/gradle :cartoony:makeCs3 --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: cartoony-aar
           path: cartoony/build/outputs/aar/*.aar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cartoony-cs3
+          path: cartoony/build/outputs/cs3/*.cs3

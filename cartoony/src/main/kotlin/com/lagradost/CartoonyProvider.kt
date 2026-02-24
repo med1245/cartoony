@@ -122,7 +122,7 @@ class CartoonyProvider : MainAPI() {
                 "home" -> mainUrl
                 else -> mainUrl
             }
-            val doc = app.get(url).document
+            val doc = app.get(url, headers = apiHeaders).document
             homePageList.addAll(parseCardsFromHtml(doc).take(20))
             if (homePageList.isEmpty()) {
                 val jsonArray = fetchJsonArray(
@@ -179,7 +179,7 @@ class CartoonyProvider : MainAPI() {
             )
             for (u in htmlSearchUrls) {
                 try {
-                    val doc = app.get(u).document
+                    val doc = app.get(u, headers = apiHeaders).document
                     val parsed = parseCardsFromHtml(doc)
                     if (parsed.isNotEmpty()) {
                         results.addAll(parsed)
@@ -294,7 +294,7 @@ class CartoonyProvider : MainAPI() {
                 }
             } else {
                 try {
-                    val doc = app.get(url).document
+                    val doc = app.get(url, headers = apiHeaders).document
                     title = doc.selectFirst("h1, .title, .name")?.text().orEmpty().ifEmpty { title }
                     posterUrl = (doc.selectFirst(".poster img, .cover img, img[alt*=poster]")?.let {
                         it.absUrl("data-original")

@@ -32,7 +32,7 @@ tasks.register("writePluginsJson") {
                 "name": "Cartoony",
                 "version": 1,
                 "authors": ["Cartoony"],
-                "lang": "ar",
+                "language": "ar",
                 "url": "https://raw.githubusercontent.com/med1245/cartoony/main/cartoony/build/outputs/cs3/Cartoony.cs3",
                 "sha256": "$hash",
                 "iconUrl": "",

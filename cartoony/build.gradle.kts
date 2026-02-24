@@ -80,7 +80,7 @@ tasks.register("makeCs3") {
               "className": "com.lagradost.CartoonyProvider",
               "description": "Cartoony.net anime provider",
               "version": 1,
-              "minApi": 3,
+              "minApi": 2,
               "targetApi": 3,
               "authors": ["Cartoony"],
               "iconUrl": "",
