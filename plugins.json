@@ -1,13 +1,24 @@
 [
-  {
-    "name": "Cartoony",
-    "version": 1,
-    "authors": ["Cartoony"],
-    "language": "ar",
-    "url": "https://raw.githubusercontent.com/med1245/cartoony/builds/Cartoony.cs3",
-    "sha256": "5d0a9e594dcd1ea788f9299871d7668b12bac4461ee7cc6ed1508c53ec00220c",
-    "iconUrl": "",
-    "tvTypes": ["Anime", "AnimeMovie"],
-    "description": "Cartoony.net anime provider"
-  }
+{
+  "name": "Cartoony",
+  "version": 1,
+  "authors": ["Cartoony"],
+  "language": "ar",
+  "url": "https://raw.githubusercontent.com/med1245/cartoony/builds/Cartoony.cs3",
+  "sha256": "af92d743cd1a8176ece3ac65667659a36dbf43cb8201e046d44e13800fd57827",
+  "iconUrl": "",
+  "tvTypes": ["Anime", "AnimeMovie"],
+  "description": "Cartoony.net anime provider"
+},
+{
+  "name": "Cartoony (Legacy)",
+  "version": 1,
+  "authors": ["Cartoony"],
+  "language": "ar",
+  "url": "https://raw.githubusercontent.com/med1245/cartoony/builds/CartoonyLegacy.cs3",
+  "sha256": "485b62638701a70ca678d4b23b82c4f8a2eac5eb0c1e946961a3ff0e0adadfa3",
+  "iconUrl": "",
+  "tvTypes": ["Anime", "AnimeMovie"],
+  "description": "Cartoony.net anime provider (legacy)"
+}
 ]
