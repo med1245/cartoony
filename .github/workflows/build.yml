@@ -70,7 +70,12 @@ jobs:
           # Stage artifacts in a runner temp dir (safe from git clean)
           PUBLISH_DIR="$RUNNER_TEMP/cartoony_publish"
           mkdir -p "$PUBLISH_DIR"
-          cp -f cartoony/build/outputs/cs3/*.cs3 "$PUBLISH_DIR/Cartoony.cs3"
+          # Copy modern bundle explicitly (avoid wildcard multiple-source error)
+          MODERN="cartoony/build/outputs/cs3/Cartoony.cs3"
+          if [ ! -f "$MODERN" ]; then
+            echo "Missing $MODERN"; ls -la cartoony/build/outputs/cs3 || true; exit 1
+          fi
+          cp -f "$MODERN" "$PUBLISH_DIR/Cartoony.cs3"
           cp -f plugins.json "$PUBLISH_DIR/plugins.json"
           # Optional legacy file
           LEGACY="cartoony/build/outputs/cs3/CartoonyLegacy.cs3"
