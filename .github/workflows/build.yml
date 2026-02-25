@@ -34,6 +34,26 @@ jobs:
         run: ./gradle-8.6/bin/gradle :cartoony:makeCs3Legacy --stacktrace
       - name: Generate plugins.json with SHA256
         run: ./gradle-8.6/bin/gradle writePluginsJson --stacktrace
+      - name: Validate artifacts and plugin list
+        run: |
+          set -e
+          test -f cartoony/build/outputs/cs3/Cartoony.cs3
+          python3 - << 'PY'
+          import json,sys,hashlib,os
+          with open("plugins.json","r",encoding="utf-8") as f:
+              data=json.load(f)
+          assert isinstance(data,list) and len(data)>=1
+          names=[d.get("name") for d in data]
+          print("Plugins listed:", names)
+          # Local checksum for modern bundle
+          p="cartoony/build/outputs/cs3/Cartoony.cs3"
+          h=hashlib.sha256(open(p,"rb").read()).hexdigest()
+          print("Local sha256 Cartoony.cs3:",h)
+          # Legacy optional
+          if os.path.exists("cartoony/build/outputs/cs3/CartoonyLegacy.cs3"):
+              hl=hashlib.sha256(open("cartoony/build/outputs/cs3/CartoonyLegacy.cs3","rb").read()).hexdigest()
+              print("Local sha256 CartoonyLegacy.cs3:",hl)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: cartoony-aar
@@ -53,9 +73,8 @@ jobs:
           cp -f cartoony/build/outputs/cs3/*.cs3 "$PUBLISH_DIR/Cartoony.cs3"
           cp -f plugins.json "$PUBLISH_DIR/plugins.json"
           # Optional legacy file
-          if ls cartoony/build/outputs/cs3/*Legacy.cs3 1> /dev/null 2>&1; then
-            cp -f cartoony/build/outputs/cs3/*Legacy.cs3 "$PUBLISH_DIR/CartoonyLegacy.cs3"
-          fi
+          LEGACY="cartoony/build/outputs/cs3/CartoonyLegacy.cs3"
+          if [ -f "$LEGACY" ]; then cp -f "$LEGACY" "$PUBLISH_DIR/CartoonyLegacy.cs3"; fi
           # Clean the current worktree to allow branch switch
           git add -A || true
           git reset --hard
