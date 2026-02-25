@@ -30,6 +30,8 @@ jobs:
         run: ./gradle-8.6/bin/gradle :cartoony:assembleDebug --stacktrace
       - name: Build CS3
         run: ./gradle-8.6/bin/gradle :cartoony:makeCs3 --stacktrace
+      - name: Build Legacy CS3
+        run: ./gradle-8.6/bin/gradle :cartoony:makeCs3Legacy --stacktrace
       - name: Generate plugins.json with SHA256
         run: ./gradle-8.6/bin/gradle writePluginsJson --stacktrace
       - uses: actions/upload-artifact@v4
@@ -50,6 +52,10 @@ jobs:
           mkdir -p "$PUBLISH_DIR"
           cp -f cartoony/build/outputs/cs3/*.cs3 "$PUBLISH_DIR/Cartoony.cs3"
           cp -f plugins.json "$PUBLISH_DIR/plugins.json"
+          # Optional legacy file
+          if ls cartoony/build/outputs/cs3/*Legacy.cs3 1> /dev/null 2>&1; then
+            cp -f cartoony/build/outputs/cs3/*Legacy.cs3 "$PUBLISH_DIR/CartoonyLegacy.cs3"
+          fi
           # Clean the current worktree to allow branch switch
           git add -A || true
           git reset --hard
@@ -66,6 +72,7 @@ jobs:
           git clean -fdx || true
           # Restore only the artifacts
           cp -f "$PUBLISH_DIR/Cartoony.cs3" Cartoony.cs3
+          if [ -f "$PUBLISH_DIR/CartoonyLegacy.cs3" ]; then cp -f "$PUBLISH_DIR/CartoonyLegacy.cs3" CartoonyLegacy.cs3; fi
           cp -f "$PUBLISH_DIR/plugins.json" plugins.json
           git add -A
           git commit -m "Update Cartoony.cs3 and plugins.json [skip ci]" --allow-empty
