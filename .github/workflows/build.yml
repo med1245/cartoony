@@ -50,6 +50,10 @@ jobs:
           mkdir -p "$PUBLISH_DIR"
           cp -f cartoony/build/outputs/cs3/*.cs3 "$PUBLISH_DIR/Cartoony.cs3"
           cp -f plugins.json "$PUBLISH_DIR/plugins.json"
+          # Clean the current worktree to allow branch switch
+          git add -A || true
+          git reset --hard
+          git clean -fdx
           # Create/switch to builds branch as orphan commit history
           git fetch origin
           if git ls-remote --exit-code --heads origin builds; then
